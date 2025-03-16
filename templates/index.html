@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plagiarism Checker - AI Enhanced</title>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #00c9ff, #92fe9d);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .container {
+            width: 90%;
+            max-width: 1300px;
+            display: flex;
+            gap: 20px;
+            backdrop-filter: blur(15px);
+        }
+        .editor-container {
+            width: 60%;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0px 5px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+        }
+        .ql-container {
+            flex-grow: 1;
+            max-height: 60vh;
+            overflow-y: auto;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .results-container {
+            width: 40%;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0px 5px 30px rgba(0, 0, 0, 0.2);
+            height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        button {
+            background: linear-gradient(45deg, #00aaff, #00ff88);
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: linear-gradient(45deg, #00ff88, #00aaff);
+            transform: scale(1.05);
+        }
+        .loading-container {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .loading-spinner {
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid #00ff88;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="editor-container">
+            <h2>AI-Powered Plagiarism Checker</h2>
+            <div id="toolbar">
+                <select class="ql-font"></select>
+                <select class="ql-size"></select>
+                <button class="ql-bold"></button>
+                <button class="ql-italic"></button>
+                <button class="ql-underline"></button>
+                <button class="ql-list" value="ordered"></button>
+                <button class="ql-list" value="bullet"></button>
+            </div>
+            <div id="editor"></div>
+            <div class="button-group">
+                <button onclick="checkPlagiarism()">Check Plagiarism</button>
+                <button onclick="downloadPDF()">Download PDF</button>
+            </div>
+        </div>
+        <div class="results-container">
+            <h2>Results</h2>
+            <div id="loading" class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Checking for plagiarism...</p>
+            </div>
+            <div id="results">Plagiarism results will appear here...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script>
+        var quill = new Quill('#editor', { modules: { toolbar: '#toolbar' }, theme: 'snow' });
+
+        function checkPlagiarism() {
+            let content = quill.root.innerText;
+            let resultsDiv = document.getElementById("results");
+            let loadingDiv = document.getElementById("loading");
+
+            resultsDiv.style.display = "none";
+            loadingDiv.style.display = "block";
+
+            fetch("/check", { 
+                method: "POST", 
+                headers: { "Content-Type": "application/x-www-form-urlencoded" }, 
+                body: "content=" + encodeURIComponent(content) 
+            })
+            .then(response => response.json())
+            .then(data => {
+                let resultHTML = `<p><strong>AI-Generated Probability:</strong> ${Math.round(data.ai_score * 100)}%</p>`;
+                resultHTML += `<h3>Plagiarism Matches:</h3>`;
+
+                if (data.plagiarism_results.length > 0) {
+                    resultHTML += "<ul>";
+                    data.plagiarism_results.forEach(result => {
+                        resultHTML += `<li><a href="${result[0]}" target="_blank">${result[0]}</a> - <b>${result[1]}%</b> match</li>`;
+                    });
+                    resultHTML += "</ul>";
+                } else {
+                    resultHTML += "<p>No significant plagiarism detected.</p>";
+                }
+
+                loadingDiv.style.display = "none";
+                resultsDiv.style.display = "block";
+                resultsDiv.innerHTML = resultHTML;
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                loadingDiv.style.display = "none";
+                resultsDiv.style.display = "block";
+                resultsDiv.innerHTML = "<p style='color: red;'>Error checking plagiarism. Please try again.</p>";
+            });
+        }
+
+        async function downloadPDF() {
+            let content = quill.root.innerText;
+
+            const response = await fetch("/download", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: "content=" + encodeURIComponent(content),
+            });
+
+            if (!response.ok) {
+                console.error("Error downloading PDF:", response.statusText);
+                return;
+            }
+
+            const blob = await response.blob();
+
+            if (window.showSaveFilePicker) {
+                try {
+                    const fileHandle = await window.showSaveFilePicker({
+                        suggestedName: "Content.pdf",
+                        types: [{ description: "PDF Document", accept: { "application/pdf": [".pdf"] } }],
+                    });
+
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    alert("File saved successfully!");
+                } catch (error) {
+                    console.error("Error saving file:", error);
+                    alert("Failed to save file.");
+                }
+            } else {
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "Content.pdf";
+                link.click();
+            }
+        }
+    </script>
+</body>
+</html>
